@@ -101,10 +101,15 @@ button{
   padding:16px;
   border:none;
   border-radius:18px;
-  font-size:1.4rem;
-  font-weight:900;
+  font-size:1.2rem;
+  font-weight:800;
   background:linear-gradient(180deg,#3b82f6,#2563eb);
   color:#fff;
+}
+
+.secondary{
+  background:#e5e7eb;
+  color:#0f172a;
 }
 
 button:active{transform:scale(.985)}
@@ -116,7 +121,8 @@ button:active{transform:scale(.985)}
 .widget .section,
 .widget button,
 .widget .history,
-.widget .footer{
+.widget .footer,
+.widget .tools{
   display:none;
 }
 
@@ -155,6 +161,13 @@ html[data-widget="small"] .sub{
 
 .entry strong{font-size:.95rem}
 .entry .meta{font-size:.75rem;color:var(--muted)}
+
+.tools{
+  margin-top:16px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
 
 .footer{
   text-align:center;
@@ -200,7 +213,14 @@ html[data-widget="small"] .sub{
 <input id="expiry" type="date" />
 </div>
 
-<button id="equals">=</button>
+<button id="equals">Add</button>
+
+<div class="tools">
+  <button id="undoBtn" class="secondary">Undo Last</button>
+  <button id="exportBtn" class="secondary">Export Backup</button>
+  <button id="importBtn" class="secondary">Import Backup</button>
+  <input id="importFile" type="file" accept="application/json" class="hidden" />
+</div>
 
 <div class="history" id="history"></div>
 
@@ -254,20 +274,11 @@ descSelect.onchange=()=>{
 if(isStandalone){
   document.documentElement.classList.add("widget");
   quickAdd.classList.remove("hidden");
-
-  const size=window.innerHeight<520?"small":"medium";
-  document.documentElement.dataset.widget=size;
-
-  quickAdd.onclick=e=>{
-    e.stopPropagation();
-    location.hash="#add";
-    location.reload();
-  };
+  document.documentElement.dataset.widget=window.innerHeight<520?"small":"medium";
 }
 
-if(location.hash==="#add"){
-  document.documentElement.classList.remove("widget");
-  setTimeout(()=>exprEl.focus(),300);
+function recomputeBalance(){
+  state.balance = state.history.reduce((sum,h)=>sum+h.delta,0);
 }
 
 function render(){
@@ -283,11 +294,8 @@ function render(){
   else balanceEl.style.color="var(--red)";
 
   balanceEl.textContent="₹"+state.balance.toLocaleString();
-
   expiryInfo.textContent=
-    daysLeft>0
-      ? `${daysLeft} days left · Daily safe ₹${dailySafe}`
-      : "Expired";
+    daysLeft>0?`${daysLeft} days left · Daily safe ₹${dailySafe}`:"Expired";
 
   if(!isStandalone){
     histEl.innerHTML=state.history.slice(-100).reverse().map(h=>`
@@ -300,15 +308,15 @@ function render(){
 }
 render();
 
+/* ADD */
 document.getElementById("equals").onclick=()=>{
   let expr=exprEl.value.trim();
   if(!expr)return;
   if(!/^[+\-*/]/.test(expr)) expr="+"+expr;
 
-  const desc=
-    descSelect.value==="Other"
-      ? descOther.value.trim()
-      : descSelect.value;
+  const desc=descSelect.value==="Other"
+    ? descOther.value.trim()
+    : descSelect.value;
 
   if(!desc){alert("Description required");return;}
 
@@ -317,8 +325,7 @@ document.getElementById("equals").onclick=()=>{
     state.balance=Math.round((state.balance+delta)*100)/100;
 
     state.history.push({
-      ts:Date.now(),
-      expr,desc,delta,balance:state.balance
+      ts:Date.now(),expr,desc,delta,balance:state.balance
     });
 
     save(state);
@@ -327,9 +334,48 @@ document.getElementById("equals").onclick=()=>{
     descOther.value="";
     descOther.classList.add("hidden");
     render();
-  }catch{
-    alert("Invalid arithmetic input");
-  }
+  }catch{alert("Invalid input");}
+};
+
+/* UNDO */
+document.getElementById("undoBtn").onclick=()=>{
+  if(!state.history.length) return;
+  state.history.pop();
+  recomputeBalance();
+  save(state);
+  render();
+};
+
+/* EXPORT */
+document.getElementById("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="balance-backup.json";
+  a.click();
+};
+
+/* IMPORT */
+document.getElementById("importBtn").onclick=()=>{
+  document.getElementById("importFile").click();
+};
+
+document.getElementById("importFile").onchange=e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!data.version||!Array.isArray(data.history)) throw "bad";
+      state=data;
+      save(state);
+      render();
+    }catch{
+      alert("Invalid backup file");
+    }
+  };
+  r.readAsText(file);
 };
 
 expiryEl.onchange=()=>{
