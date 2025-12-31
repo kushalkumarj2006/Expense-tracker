@@ -179,6 +179,7 @@ html[data-widget="small"] .sub{
 <label>Description</label>
 <select id="descSelect">
   <option value="">Select category</option>
+  <option>Dad</option>
   <option>Snack / Juice</option>
   <option>Food</option>
   <option>Travel</option>
@@ -289,7 +290,7 @@ function render(){
       : "Expired";
 
   if(!isStandalone){
-    histEl.innerHTML=state.history.slice(-5).reverse().map(h=>`
+    histEl.innerHTML=state.history.slice(-100).reverse().map(h=>`
       <div class="entry">
         <strong>${h.desc}</strong>
         <div class="meta">${h.expr} → ₹${h.balance}</div>
